@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚖️ Legal AI Assistant</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Roboto', sans-serif;
+        }
+        body {
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            overflow: hidden;
+        }
+        .sidebar {
+            width: 300px;
+            background: #2a5298;
+            padding: 20px;
+            color: #fff;
+        }
+        .sidebar h2 {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+        }
+        .main {
+            flex: 1;
+            padding: 30px;
+            color: #333;
+        }
+        .main h1 {
+            font-size: 2em;
+            color: #1e3c72;
+            margin-bottom: 10px;
+        }
+        .main p {
+            color: #666;
+            margin-bottom: 20px;
+        }
+        .radio-group {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .radio-group label {
+            background: #e9ecef;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .radio-group input[type="radio"] {
+            display: none;
+        }
+        .radio-group input[type="radio"]:checked + label {
+            background: #1e3c72;
+            color: #fff;
+        }
+        .chat-box {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            height: 400px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            border-radius: 8px;
+            max-width: 80%;
+        }
+        .user-message {
+            background: #1e3c72;
+            color: #fff;
+            margin-left: auto;
+        }
+        .assistant-message {
+            background: #fff;
+            color: #333;
+            border: 1px solid #ddd;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+        .input-group input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 25px;
+            outline: none;
+            font-size: 1em;
+        }
+        .input-group button {
+            padding: 12px 25px;
+            background: #1e3c72;
+            color: #fff;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .input-group button:hover {
+            background: #2a5298;
+        }
+        .spinner {
+            display: none;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #1e3c72;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h2>Document Setup</h2>
+            <form id="upload-form" enctype="multipart/form-data">
+                <input type="file" name="file" accept=".pdf" style="margin-bottom: 10px;">
+                <button type="submit">Upload PDF</button>
+            </form>
+            <div id="upload-status" style="margin-top: 10px;"></div>
+        </div>
+        <div class="main">
+            <h1>⚖️ Legal AI Assistant</h1>
+            <p>Upload legal documents and consult with AI specialists</p>
+            <div class="radio-group">
+                <input type="radio" id="contract" name="analysis" value="Contract Review" checked>
+                <label for="contract">Contract Review</label>
+                <input type="radio" id="research" name="analysis" value="Legal Research">
+                <label for="research">Legal Research</label>
+                <input type="radio" id="risk" name="analysis" value="Risk Assessment">
+                <label for="risk">Risk Assessment</label>
+                <input type="radio" id="compliance" name="analysis" value="Compliance Check">
+                <label for="compliance">Compliance Check</label>
+                <input type="radio" id="custom" name="analysis" value="Custom Queries">
+                <label for="custom">Custom Queries</label>
+            </div>
+            <div class="chat-box" id="chat-box">
+                {% for message in chat_history %}
+                    <div class="message {{ 'user-message' if message.role == 'user' else 'assistant-message' }}">
+                        {{ message.content | safe }}
+                    </div>
+                {% endfor %}
+            </div>
+            <div class="input-group">
+                <input type="text" id="prompt" placeholder="Ask your legal question...">
+                <button onclick="sendMessage()">Send</button>
+            </div>
+            <div class="spinner" id="spinner"></div>
+        </div>
+    </div>
+
+    <script>
+        const chatBox = document.getElementById("chat-box");
+        const promptInput = document.getElementById("prompt");
+        const spinner = document.getElementById("spinner");
+        const uploadForm = document.getElementById("upload-form");
+        const uploadStatus = document.getElementById("upload-status");
+
+        uploadForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const formData = new FormData(uploadForm);
+            spinner.style.display = "block";
+            const response = await fetch("/upload", {
+                method: "POST",
+                body: formData
+            });
+            const result = await response.json();
+            spinner.style.display = "none";
+            uploadStatus.innerHTML = response.ok ? 
+                `<span style="color: #28a745;">${result.message}</span>` : 
+                `<span style="color: #dc3545;">${result.error}</span>`;
+        });
+
+        async function sendMessage() {
+            const prompt = promptInput.value.trim();
+            if (!prompt) return;
+
+            const analysisType = document.querySelector('input[name="analysis"]:checked').value;
+            addMessage("user-message", prompt);
+            promptInput.value = "";
+            spinner.style.display = "block";
+
+            const response = await fetch("/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ prompt, analysis_type: analysisType })
+            });
+            const result = await response.json();
+            spinner.style.display = "none";
+
+            if (response.ok) {
+                addMessage("assistant-message", result.response);
+            } else {
+                addMessage("assistant-message", `<span style="color: #dc3545;">${result.error}</span>`);
+            }
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function addMessage(className, content) {
+            const message = document.createElement("div");
+            message.className = `message ${className}`;
+            message.innerHTML = content;
+            chatBox.appendChild(message);
+        }
+
+        promptInput.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") sendMessage();
+        });
+    </script>
+</body>
+</html>
