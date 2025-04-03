@@ -2,6 +2,7 @@ from flask import Flask, request, render_template, jsonify
 from groq import Groq
 from pypdf import PdfReader
 import io
+import re
 
 app = Flask(__name__)
 
@@ -49,6 +50,44 @@ def generate_response(prompt, context, agent_role):
         return response.choices[0].message.content
     except Exception as e:
         return f"Error in {agent_role} analysis: {str(e)}"
+
+def format_response(response):
+    """Format the raw response into neat HTML"""
+    # Split response by agent sections
+    sections = re.split(r'\*\*(.*?):\*\*', response)
+    formatted = ""
+    
+    for i in range(1, len(sections), 2):  # Start at 1 to get agent name first
+        agent = sections[i].strip()
+        content = sections[i + 1].strip()
+        
+        # Split content into paragraphs or list items
+        lines = content.split('\n')
+        formatted_content = ""
+        in_list = False
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            # Check if line starts with a number (e.g., "1. ") to treat as list item
+            if re.match(r'^\d+\.\s', line):
+                if not in_list:
+                    formatted_content += "<ul>"
+                    in_list = True
+                formatted_content += f"<li>{line}</li>"
+            else:
+                if in_list:
+                    formatted_content += "</ul>"
+                    in_list = False
+                formatted_content += f"<p>{line}</p>"
+        
+        if in_list:
+            formatted_content += "</ul>"
+        
+        formatted += f"<div class='agent-section'><h3>{agent}</h3>{formatted_content}</div>"
+    
+    return formatted if formatted else f"<p>{response}</p>"  # Fallback for unformatted text
 
 # Store chat history in memory (for simplicity; use a database for production)
 chat_history = []
@@ -100,11 +139,14 @@ def chat():
         agent_response = generate_response(prompt, context, agent)
         response += f"**{agent}:**\n{agent_response}\n\n"
 
+    # Format the response for neat display
+    formatted_response = format_response(response)
+
     # Update chat history
     chat_history.append({"role": "user", "content": prompt})
-    chat_history.append({"role": "assistant", "content": response})
+    chat_history.append({"role": "assistant", "content": formatted_response})
 
-    return jsonify({"response": response}), 200
+    return jsonify({"response": formatted_response}), 200
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
